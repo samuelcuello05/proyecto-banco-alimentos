@@ -189,11 +189,26 @@ _En desarrollo._
 
 ## 3.1 Tecnologías y herramientas
 
-_En desarrollo._
+* **Python 3.14.7**, solo con la biblioteca estándar en las soluciones: `itertools.product` (subconjuntos de la exhaustiva), `random` (datos con semilla fija), `time.perf_counter` (cronómetro), `statistics`, `math` y `pathlib`. No se usan bibliotecas de optimización ni de mochila.
+* **matplotlib 3.11.1** para las gráficas, registrado con sus dependencias en [requirements.txt](requirements.txt).
+* **Git y GitHub** para el trabajo en equipo; cada integrante sube sus aportes con su cuenta.
+* **Equipo de medición:** AMD Ryzen 5 4600H, 15,4 GB de RAM, Windows 11, con las demás aplicaciones cerradas.
 
 ## 3.2 Operación 3 — Cargue de los vehículos
 
-_En desarrollo._
+**Código:** [estrategia.py](src/cargue_vehiculos/estrategia.py) · [exhaustivo.py](src/cargue_vehiculos/exhaustivo.py) · [regla_actual.py](src/cargue_vehiculos/regla_actual.py) · [pruebas.py](src/cargue_vehiculos/pruebas.py)
+
+* [estrategia.py](src/cargue_vehiculos/estrategia.py): `llenar_tabla` llena K fila por fila, `reconstruir_lotes` recorre la tabla hacia arriba y `cargar_vehiculo` (la firma del enunciado) devuelve `(valor, índices)`.
+* [exhaustivo.py](src/cargue_vehiculos/exhaustivo.py): `cargar_exhaustivo` recorre los 2ⁿ vectores de `product([0, 1], repeat=n)` y se queda con el primer subconjunto de mayor valor que cabe.
+* [regla_actual.py](src/cargue_vehiculos/regla_actual.py): `cargar_por_vencimiento` (la regla actual, que se detiene en el primer lote que no cabe) y `cargar_por_densidad` (que salta los que no caben).
+
+**Decisiones de implementación:**
+
+* **Las firmas y los docstrings del enunciado no cambian.** Para contar operaciones, cada solución tiene una variante `..._contando` que devuelve además el conteo, y la función del enunciado la llama y descarta ese número. Así lo que se cronometra es exactamente el mismo código que se cuenta. El contador de la programación dinámica suma W + 1 una vez por fila (n sumas en total, frente a n·W celdas), así que no altera el tiempo.
+* **La tabla completa se guarda** porque la reconstrucción la necesita. La fila anterior y la actual se toman en variables locales (`anterior`, `actual`) para no indexar dos veces por celda.
+* **La capacidad va en kilogramos, como la da el caso.** Expresarla en gramos multiplicaría el número de columnas por 1.000 sin cambiar la respuesta (sección 4.1.1).
+* **Ninguna función modifica la lista de lotes**, y los índices se devuelven en orden creciente. Las reglas ordenan una lista de índices, no los lotes.
+* **Desempates documentados** (sección 1.6): la programación dinámica no sube un lote si empata; la exhaustiva conserva el primer subconjunto que encuentra; las reglas desempatan por orden de llegada.
 
 ## 3.3 Operación 4 — Saturación de la bodega
 
@@ -205,7 +220,149 @@ _En desarrollo._
 
 ## 4.1 Operación 3 — Cargue de los vehículos
 
-_En desarrollo._
+### 4.1.1 Complejidad temporal y espacial
+
+| Solución | Tiempo | Memoria extra | De dónde sale |
+| --- | --- | --- | --- |
+| Programación dinámica | **Θ(n·W)** | Θ(n·W) | (n + 1)(W + 1) celdas, cada una con una comparación Θ(1); la reconstrucción suma Θ(n). La tabla completa ocupa (n + 1)(W + 1) enteros. |
+| Exhaustiva | **Θ(n·2ⁿ)** | Θ(n) | 2ⁿ subconjuntos, y en cada uno se revisan los n lotes. |
+| Regla actual (vencimiento) | Θ(n log n) | Θ(n) | Ordenar los índices cuesta Θ(n log n) y el recorrido Θ(n). |
+| Voraz por densidad | Θ(n log n) | Θ(n) | Igual que la anterior. Ninguna de las dos depende de W. |
+
+**El costo de la programación dinámica depende de W, no solo de n.** Θ(n·W) es **pseudo-polinomial**: crece con el *valor* de la capacidad, no con las cifras que se necesitan para escribirla. Con la misma ruta de 600 lotes, pasar de W = 4.000 kg a W = 4.000.000 g solo agrega tres cifras al dato, pero multiplica la tabla por 1.000 (de 2,4 millones a 2.400 millones de celdas). Con el volumen real la tabla es pequeña: 600 × 4.001 ≈ 2,4 millones de celdas por ruta, que según `tracemalloc` ocupan **21,7 MiB** en el peor caso (40,3 MiB con 1.200 lotes y 83,7 MiB si además W = 8.000 kg). La exhaustiva, en cambio, tendría que revisar 600 × 2⁶⁰⁰ ≈ 2,5·10¹⁸³ lotes.
+
+### 4.1.2 Verificación
+
+[pruebas.py](src/cargue_vehiculos/pruebas.py) es un script con `assert` que prueba las cuatro soluciones:
+
+| Caso | Qué se comprueba |
+| --- | --- |
+| Sin lotes | Las cuatro devuelven `(0, [])` |
+| Capacidad 0 | `(0, [])` con los lotes del ejemplo |
+| Un solo lote | Si cabe, `(450, [0])`; si no cabe, `(0, [])` |
+| Ningún lote cabe | Tres lotes de 1.100 a 2.000 kg en 1.000 kg: `(0, [])` |
+| Todo cabe y llenado exacto | Las cuatro cargan todo: `(1250, [0, 1, 2])` y `(1200, [0, 1])` |
+| Solo cabe un lote a la vez | La PD, la exhaustiva y la densidad eligen el de valor 900; la regla actual se queda con el primero que vence (500) |
+| Ejemplo a mano (sección 2.2) | `cargar_vehiculo` y `cargar_exhaustivo` dan `(1400, [1, 3, 4])`; las 66 casillas de la tabla a mano coinciden con `llenar_tabla`, y cada columna intermedia repite la de su centena |
+| Contraejemplo (sección 5.1) | La regla actual da `(600, [0])` y la de densidad `(1300, [2, 3, 4])`, ambas menores que 1.400 |
+| 30 instancias aleatorias pequeñas (semilla 2026) | n de 0 a 12, pesos de 1 a 20 kg, valores de 1 a 50, W de 0 a 60: la PD y la exhaustiva dan **el mismo valor** |
+| 10 instancias con el generador de la medición | n de 1 a 12 y W de 1.000 a 4.000 kg: la PD y la exhaustiva dan el mismo valor |
+| Restricción del negocio (en todas las instancias y las cuatro soluciones) | Peso cargado ≤ W; índices únicos, ordenados y en rango, es decir, cada lote sube completo y una sola vez (no se fracciona ni se repite); suma de valores = valor devuelto; ninguna regla supera el óptimo; la regla actual carga un prefijo del orden por vencimiento y el siguiente lote no cabe; todo lote que deja la densidad pesa más de lo que quedó libre; la lista de entrada no cambia |
+
+Salida:
+
+```text
+Todas las pruebas pasaron (40 instancias aleatorias con semilla 2026).
+La regla por vencimiento quedo por debajo del optimo en 20 de 40 instancias y la regla por densidad en 7 de 40.
+```
+
+Además, [medicion.py](src/cargue_vehiculos/medicion.py) vuelve a comparar la PD con la exhaustiva **dentro del experimento**: en cada instancia de n = 4 a 20 lanza `ValueError` si los valores no coinciden. En las 27 instancias coincidieron.
+
+### 4.1.3 Cómo se midió
+
+**Código:** [datos.py](src/cargue_vehiculos/datos.py) · [medicion.py](src/cargue_vehiculos/medicion.py)
+
+* **Datos sintéticos** ([datos.py](src/cargue_vehiculos/datos.py)): el 60 % de los lotes son grandes (de 500 a 2.000 kg, una o varias estibas) y el 40 % son cajas (de 10 a 150 kg). El valor es peso × (1 a 3 raciones por kg) × la prioridad de la categoría (proteína 3, frutas y verduras 2, otros 1, con probabilidades de 25, 35 y 40 %). El vencimiento va de 1 a 20 días.
+* **Calibración con el dato del cliente:** la proporción y el peso de los lotes grandes se ajustaron para que la regla actual llene en promedio cerca del **78 %** del vehículo, la cifra que reporta el banco. Con 600 rutas de prueba dio entre 78,4 % y 79,1 %; en las 70 rutas del experimento 4 dio 81,1 %.
+* **Semilla fija** `random.Random(2026)` (2027, 2028 y 2029 en los experimentos 2 a 4). En cada tamaño, **todas las soluciones reciben las mismas instancias**.
+* **Cronómetro:** `time.perf_counter()` solo alrededor de la llamada a cada solución; los datos se generan antes. Cada instancia se mide 5 veces (3 en la exhaustiva y en el experimento 4) y se toma la mediana. El tiempo reportado es la **media sobre 3 instancias** por tamaño.
+* **Operaciones contadas:** las celdas que calcula la PD y los lotes que revisa la exhaustiva (n por subconjunto), con los contadores de las funciones `..._contando`.
+* **Cuatro experimentos:**
+
+| Experimento | Tamaños | Soluciones |
+| --- | --- | --- |
+| 1. n pequeño, W = 3.000 kg fija | n = 4, 6, …, 20 (9 tamaños; 4→8, 6→12, 8→16 y 10→20 duplican n) | Las cuatro |
+| 2. n grande, W = 3.000 kg fija | n = 40, 80, …, 2.560 (cada uno el doble del anterior) | PD y reglas (la exhaustiva ya no termina) |
+| 3. n = 200 fijo, W creciente | W = 250, 500, …, 16.000 kg (cada una el doble) | PD y reglas |
+| 4. Volumen real | 5 días × 14 rutas con 300 a 600 lotes y W de 2.500 a 4.000 kg | PD y reglas; también llenado y valor |
+
+`medicion.py` tarda unos 2 minutos e imprime todas las tablas, factores, pendientes y estimaciones que se citan abajo.
+
+### 4.1.4 Resultados
+
+**Experimento 1** (n pequeño, W = 3.000 kg):
+
+| n | PD (ms) | Exhaustiva (ms) | Regla actual (ms) | Densidad (ms) | Celdas PD | Lotes revisados por la exhaustiva |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4 | 1,135 | 0,009 | 0,0016 | 0,0024 | 12.004 | 64 |
+| 6 | 1,837 | 0,042 | 0,0019 | 0,0028 | 18.006 | 384 |
+| 8 | 2,265 | 0,212 | 0,0019 | 0,0034 | 24.008 | 2.048 |
+| 10 | 2,907 | 1,001 | 0,0020 | 0,0039 | 30.010 | 10.240 |
+| 12 | 3,419 | 4,556 | 0,0022 | 0,0045 | 36.012 | 49.152 |
+| 14 | 4,106 | 20,724 | 0,0026 | 0,0052 | 42.014 | 229.376 |
+| 16 | 4,668 | 92,472 | 0,0026 | 0,0060 | 48.016 | 1.048.576 |
+| 18 | 5,203 | 409,408 | 0,0029 | 0,0063 | 54.018 | 4.718.592 |
+| 20 | 5,847 | 1.796,571 | 0,0032 | 0,0069 | 60.020 | 20.971.520 |
+
+**Experimento 2** (n grande, W = 3.000 kg):
+
+| n | PD (ms) | Regla actual (ms) | Densidad (ms) | Celdas PD | ns por celda |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 40 | 10,95 | 0,0052 | 0,0131 | 120.040 | 91,2 |
+| 80 | 22,89 | 0,0098 | 0,0289 | 240.080 | 95,3 |
+| 160 | 45,62 | 0,0183 | 0,0555 | 480.160 | 95,0 |
+| 320 | 90,79 | 0,0397 | 0,1201 | 960.320 | 94,5 |
+| 640 | 179,11 | 0,0892 | 0,2610 | 1.920.640 | 93,3 |
+| 1.280 | 354,15 | 0,2033 | 0,5528 | 3.841.280 | 92,2 |
+| 2.560 | 723,88 | 0,4454 | 1,2029 | 7.682.560 | 94,2 |
+
+![Cargue de vehículos: tiempo medio vs. número de lotes](graficas/cargue_vehiculos/tiempo_vs_n.png)
+
+![Cargue de vehículos: operaciones contadas vs. número de lotes](graficas/cargue_vehiculos/operaciones_vs_n.png)
+
+**Experimento 3** (n = 200 lotes fijos, W creciente):
+
+| W (kg) | PD (ms) | Regla actual (ms) | Densidad (ms) | Celdas PD | ns por celda |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 250 | 2,95 | 0,0257 | 0,0721 | 50.200 | 58,8 |
+| 500 | 6,71 | 0,0238 | 0,0723 | 100.200 | 67,0 |
+| 1.000 | 14,72 | 0,0235 | 0,0702 | 200.200 | 73,5 |
+| 2.000 | 34,56 | 0,0240 | 0,0718 | 400.200 | 86,4 |
+| 4.000 | 79,85 | 0,0239 | 0,0710 | 800.200 | 99,8 |
+| 8.000 | 171,44 | 0,0253 | 0,0718 | 1.600.200 | 107,1 |
+| 16.000 | 356,11 | 0,0270 | 0,0734 | 3.200.200 | 111,3 |
+
+![Cargue de vehículos: tiempo vs. capacidad W](graficas/cargue_vehiculos/tiempo_vs_capacidad.png)
+
+### 4.1.5 Lo medido contra lo esperado
+
+**Al duplicar n** (los factores los calcula `medicion.py`):
+
+| Pareja n → 2n | PD | Θ(n·W) predice | Exhaustiva | Θ(n·2ⁿ) predice | Regla actual | Densidad |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4 → 8 | ×2,00 | ×2 | ×22,7 | ×32 | ×1,17 | ×1,42 |
+| 6 → 12 | ×1,86 | ×2 | ×108,9 | ×128 | ×1,18 | ×1,62 |
+| 8 → 16 | ×2,06 | ×2 | ×435,9 | ×512 | ×1,37 | ×1,76 |
+| 10 → 20 | ×2,01 | ×2 | ×1.795,4 | ×2.048 | ×1,63 | ×1,78 |
+| 640 → 1.280 | ×1,98 | ×2 | — | — | ×2,28 | ×2,12 |
+| 1.280 → 2.560 | ×2,04 | ×2 | — | — | ×2,19 | ×2,18 |
+
+* **Programación dinámica frente a n:** con W fija, al duplicar n el tiempo se multiplica entre ×1,86 y ×2,09 en los diez pares medidos, y las celdas exactamente ×2,00. La pendiente log-log del experimento 2 es **1,001** (1 = lineal) y el costo por celda se mantiene entre 91 y 95 ns. Coincide con Θ(n·W).
+* **Exhaustiva:** las operaciones contadas se multiplican exactamente por 2ⁿ·2 (×32, ×128, ×512 y ×2.048). El tiempo se queda algo por debajo en tamaños pequeños (×22,7 frente a ×32), porque el costo fijo de cada llamada pesa más cuando hay pocos subconjuntos, y se acerca al esperado al crecer n (×1.795 frente a ×2.048). Con dos lotes más el tiempo se multiplica por ×4,39 de 18 a 20 lotes (se esperaba 4 × 20/18 = ×4,44). En la gráfica semilogarítmica la curva es una recta: log₂(tiempo) crece **1,099 por lote**, es decir, cada lote adicional multiplica el tiempo por ×2,14.
+* **Cruce:** con 10 lotes la exhaustiva todavía gana (1,0 ms frente a 2,9 ms), porque la tabla de 3.001 columnas tiene un costo fijo. Desde 12 lotes gana la PD, y con 20 lotes es **307 veces** más rápida (1.796,6 ms frente a 5,8 ms).
+* **Programación dinámica frente a W (experimento 3):** al duplicar W las celdas se duplican exactamente, pero el tiempo se multiplica entre ×2,08 y ×2,35 y la pendiente log-log es **1,162**, no 1. La diferencia está en el costo por celda, que sube de 58,8 ns (W = 250) a 111,3 ns (W = 16.000). Cada fila tiene W + 1 referencias: con W = 16.000, dos filas ya no caben en la caché del procesador, mientras que con W = 3.000 (experimento 2) sí caben y el costo por celda no cambia. El ajuste lineal −7,20 ms + 22,58 ms por cada 1.000 kg (gráfica, panel izquierdo) tiene un intercepto negativo por esa curvatura leve. La conclusión de la guía se confirma con datos: **el costo depende de W**, y con 200 lotes pasar de 1.000 a 16.000 kg multiplica el tiempo por 24.
+* **Reglas voraces:** Θ(n log n) predice algo más que ×2 al duplicar n (2·log₂ 2.560 / log₂ 1.280 = ×2,19). La regla actual dio ×2,19 y la densidad ×2,18 en ese par, con pendientes log-log de 1,083 y 1,082. Frente a W, sus pendientes son **0,015 y 0,003**: no dependen de la capacidad. Con n ≤ 20 crecen menos que ×2 porque domina un costo fijo de unos 2 µs.
+
+### 4.1.6 Calidad de la carga con el volumen real
+
+Experimento 4: 5 días simulados × 14 rutas reales, es decir, 70 rutas con 300 a 600 lotes y vehículos de 2.500 a 4.000 kg.
+
+| Solución | Tiempo medio por día (s) | Tiempo máximo por día (s) | Llenado medio | Valor medio (% del óptimo) | Peor ruta (% del óptimo) | kg cargados por día |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Programación dinámica | 1,9197 | 2,0635 | 99,96 % | 100 % | 100 % | 45.117 |
+| Regla actual (vencimiento) | 0,0009 | 0,0009 | 81,11 % | 35,20 % | 10,2 % | 36.736 |
+| Voraz por densidad | 0,0026 | 0,0027 | 99,86 % | 99,48 % | 97,43 % | 45.073 |
+
+* La regla actual deja en promedio el **19 %** del vehículo vacío (en una ruta llenó solo el 48,7 %) y logra apenas el **35 %** del valor nutricional posible: carga lo que vence primero, sin mirar cuánto aporta. La PD lleva **8.381 kg más por día** en los mismos 14 viajes y **2,8 veces** más valor.
+* La voraz por densidad se acerca mucho (99,48 % del valor en promedio), pero **no llegó al óptimo en 62 de las 70 rutas**: no cumple la restricción del máximo. Con lotes pequeños frente a la capacidad, el hueco que deja suele ser pequeño. Con lotes grandes puede ser mucho mayor (−7,1 % en el contraejemplo).
+* Estas cifras salen de datos sintéticos calibrados con el 78 % del cliente. La magnitud real de la ganancia en valor depende de cuánto varíe el valor por kilogramo entre los lotes del banco.
+
+### 4.1.7 Extrapolación al volumen real y ventana operativa
+
+* **Programación dinámica:** el tiempo es proporcional al número de celdas (pendiente 1,001 frente a n y costo casi constante por celda), así que se extrapola por celdas y no con una regla de tres sobre una sola medición. Con n ≥ 320 y W ≥ 1.000 el costo por celda medido va de **73,5 a 111,3 ns**. El peor día real (14 rutas × 600 lotes × 4.001 columnas = 33,6 millones de celdas) tomaría **entre 2,47 y 3,74 s**.
+* **Validación de la extrapolación:** para el día medio simulado (20,1 millones de celdas) el mismo cálculo predice entre 1,48 y 2,24 s, y la medición directa dio **1,92 s**, dentro del rango. Por eso la estimación es confiable para este equipo.
+* **Ventana:** las 2 horas son 7.200 s. La PD usa el **0,027 %** de la ventana en el día medio y el 0,052 % en el peor día; deja prácticamente toda la ventana para las operaciones 1 y 2. Las reglas usan menos de 3 ms por día.
+* **Exhaustiva:** cuesta 85,7 ns por lote revisado (n = 20). Con 300 lotes serían 300 × 2³⁰⁰ revisiones: **1,7·10⁷⁸ años por ruta**, 1,2·10⁶⁸ veces la edad del universo; con 600 lotes, 6,8·10¹⁶⁸ años. **No terminaría nunca.** Aquí no sirve una regla de tres: cada lote adicional duplica el tiempo. En la ventana de 2 horas, la exhaustiva solo alcanzaría para rutas de **27 lotes**, frente a los 300 a 600 reales.
 
 ## 4.2 Operación 4 — Saturación de la bodega
 
