@@ -177,7 +177,9 @@ POR_DENSIDAD(lotes, W):                  # la voraz tentadora
 
 ### Cómo reduce el consumo energético
 
-_En desarrollo._
+En cómputo puro, la regla actual ya es barata (Θ(n log n)), y la programación dinámica gasta más: unos 2 segundos al día (sección 4.1.7). Pero la restricción del caso exige el **máximo**, y la única otra forma de garantizarlo, la exhaustiva, no terminaría nunca: con 300 lotes tardaría más de 10⁷⁸ años por ruta. La programación dinámica es la estrategia que cumple la restricción con un consumo despreciable (0,024 kWh al año, sección 6.1).
+
+El ahorro que importa está en el alimento. En los datos sintéticos, los mismos 14 viajes pasan de llevar el 81 % de la capacidad a llevar el 99,96 %, unos 8.381 kg más por día. Eso significa menos alimento que se vence en la bodega (2,5 kg de CO₂e por kilogramo desechado, según el banco) y menos combustible por kilogramo entregado.
 
 ## 2.3 Operación 4: tramo de mayor crecimiento del inventario
 
@@ -374,7 +376,50 @@ Experimento 4: 5 días simulados × 14 rutas reales, es decir, 70 rutas con 300 
 
 ## 5.1 Operación 3 — Cargue de los vehículos
 
-_En desarrollo._
+### Contraejemplo calculado: por qué fallan la regla actual y la regla por densidad
+
+Instancia: la del ejemplo a mano (sección 2.2), una camioneta de 1.000 kg con L0 (600 kg, 600, vence en 1 día), L1 (500, 700, 2), L2 (400, 600, 3), L3 (300, 480, 4) y L4 (200, 220, 5).
+
+| Estrategia | Lotes cargados | Peso | Valor | Diferencia con el óptimo |
+| --- | --- | ---: | ---: | ---: |
+| Programación dinámica (óptimo) | L1, L3, L4 | 1.000 kg (100 %) | **1.400** | — |
+| Regla actual: por vencimiento | L0 | 600 kg (60 %) | 600 | **−800 (−57,1 %)** |
+| Regla tentadora: por densidad | L2, L3, L4 | 900 kg (90 %) | 1.300 | **−100 (−7,1 %)** |
+
+* **Por vencimiento:** sube L0 (vence mañana, 600 kg). El siguiente, L1 (500 kg), ya no cabe (1.100 kg) y la regla **se detiene**. El vehículo sale con 400 kg libres, aunque L2, L3 o L4 cabían. Es el mismo síntoma que reporta el banco: vehículos que salen al 78 %.
+* **Por densidad:** sube L3 (1,60 por kg) y L2 (1,50), con 700 kg. L1 (1,40) no cabe y lo salta; L4 (1,10) sí cabe, con 900 kg en total. Quedan **100 kg que ningún lote llena**. El óptimo renuncia a L2, el segundo lote más denso, para que L1, L3 y L4 llenen exactamente los 1.000 kg. Una regla que elige una vez y no reconsidera no puede ver ese intercambio.
+* **No es un caso aislado:** en las 40 instancias aleatorias de las pruebas, la regla actual quedó por debajo del óptimo en 20 y la de densidad en 7. Con el volumen real sintético, la densidad no llegó al óptimo en 62 de 70 rutas, y la regla actual logró en promedio el 35 % del valor (sección 4.1.6). Que una regla acierte en algunas instancias no prueba que sea correcta.
+
+### Condición contraria: cuándo bastaría una estrategia voraz
+
+* **Si los lotes se pudieran fraccionar** (por ejemplo, granos a granel que se despachan por kilo), el problema sería la mochila fraccionaria. Ahí la voraz por densidad **sí es óptima**: sube los lotes de mayor valor por kilogramo y parte el último, en Θ(n log n). En el ejemplo subiría L3, L2 y 300 kg de L1: 480 + 600 + 420 = 1.500. En el banco eso no es posible: cada lote tiene un código, sube completo o no sube, y partirlo rompería la trazabilidad sanitaria.
+* **Si todos los lotes pesaran lo mismo** (estibas estándar), bastaría una voraz por valor: subir los ⌊W/p⌋ lotes más valiosos.
+* **Si la capacidad nunca fuera una limitación** (todo cabe), cualquier regla cargaría todo.
+
+En el caso real los lotes son indivisibles y de pesos muy distintos, así que hace falta la programación dinámica.
+
+### Ventajas y limitaciones
+
+| Criterio | Programación dinámica | Exhaustiva | Regla actual (vencimiento) | Voraz por densidad |
+| --- | --- | --- | --- | --- |
+| Garantiza el máximo | **Sí** | Sí | No | No |
+| Tiempo por día (volumen real) | 1,92 s (≤ 3,74 s en el peor día) | No termina | 0,9 ms | 2,6 ms |
+| Complejidad | Θ(n·W) | Θ(n·2ⁿ) | Θ(n log n) | Θ(n log n) |
+| ¿Depende de W? | Sí, linealmente | No | No | No |
+| Memoria | Θ(n·W): 21,7 MiB por ruta | Θ(n) | Θ(n) | Θ(n) |
+| Llenado medio / valor medio (sintético) | 99,96 % / 100 % | — | 81,11 % / 35,20 % | 99,86 % / 99,48 % |
+| Uso razonable | Producción | Solo verificar en tamaños pequeños | Línea base | Respaldo si algún día la PD no cupiera |
+
+### Recomendación para la Dirección de Operaciones
+
+**Adoptar la programación dinámica (`cargar_vehiculo`) para el cargue de los vehículos.**
+
+* **Qué gana frente a hoy:** cumple la restricción del caso (valor máximo sin superar la capacidad, verificado contra la solución exacta). En los datos sintéticos, los vehículos pasan de salir al 81 % de su capacidad a salir al 99,96 %: 8.381 kg más de alimento por día en los mismos 14 viajes, con 2,8 veces el valor nutricional. Todo eso con unos 2 segundos de cómputo por día, el 0,03 % de la ventana.
+* **Riesgos y límites que debe conocer:**
+  1. **El costo crece con la capacidad W, no solo con los lotes.** Vehículos más grandes o una unidad más fina (gramos) multiplican el tiempo y la memoria en la misma proporción. La capacidad debe seguir en kilogramos.
+  2. **La memoria es Θ(n·W):** 21,7 MiB por ruta hoy, y más de 80 MiB con el doble de lotes y vehículos de 8.000 kg. Si crece, se puede guardar una sola fila y una tabla de bits de decisión.
+  3. **La programación dinámica no mira el vencimiento.** En el ejemplo deja en la bodega a L0, que vence mañana. Si el banco no quiere que eso pase, debe decidir cómo pesa la urgencia: incluirla en el valor del lote o subir primero, como obligatorios, los lotes que vencen en 24 horas y aplicar la PD a la capacidad que quede.
+  4. Esta operación **no resuelve sola la ventana de 2 horas**: casi todo el tiempo de la planeación está en las operaciones 1 y 2.
 
 ## 5.2 Operación 4 — Saturación de la bodega
 
@@ -392,7 +437,19 @@ _En desarrollo._
 
 ### Operación 3 — regla actual frente a programación dinámica
 
-_En desarrollo._
+Energía = 0,15 kW × tiempo en horas. Los tiempos por día son los medidos con el volumen real (sección 4.1.6), y el año tiene 300 días de operación. Son **estimaciones** para este equipo, apoyadas en esas mediciones.
+
+| Solución | Tiempo por día | kWh por día | kWh por año |
+| --- | ---: | ---: | ---: |
+| Regla actual (vencimiento) | 0,0009 s | 3,7·10⁻⁸ | 1,1·10⁻⁵ |
+| Voraz por densidad | 0,0026 s | 1,1·10⁻⁷ | 3,2·10⁻⁵ |
+| Programación dinámica (día medio, medido) | 1,92 s | 8,0·10⁻⁵ | **0,024** |
+| Programación dinámica (peor día, estimado) | 3,74 s | 1,6·10⁻⁴ | 0,047 |
+| Exhaustiva | No termina | — | — |
+
+* **Diferencia a un año:** la programación dinámica consume **0,024 kWh más al año** que la regla actual (0,047 kWh en el peor caso). Es lo mismo que el computador de 150 W encendido unos 10 minutos en todo el año. Con 0,220 kg CO₂e por kWh, son unos 5 g de CO₂e al año.
+* La única otra forma de garantizar el máximo, la exhaustiva, no terminaría, así que su consumo no tiene límite.
+* **El balance ambiental lo decide el alimento, no el computador.** La PD lleva unas 2.514 t más de alimento al año en los mismos viajes (8.381 kg por día × 300 días, en datos sintéticos). Si apenas el 1 % de ese alimento se hubiera vencido en la bodega, se evitarían unas 25 t de desperdicio y **≈ 63 t de CO₂e al año** (2,5 kg de CO₂e por kilogramo, dato del banco), millones de veces más que los 5 g que agrega el cómputo.
 
 ### Operación 4 y proceso completo
 
@@ -420,7 +477,39 @@ _En desarrollo._
 
 # 8. Reproducción
 
-_En desarrollo._
+Requisitos: Python 3 y las dependencias de [requirements.txt](requirements.txt) (matplotlib). Desde la raíz del repositorio se crea y se activa el entorno virtual:
+
+```bash
+python -m venv .venv
+```
+
+En Git Bash:
+
+```bash
+source .venv/Scripts/activate
+```
+
+En Windows PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Después se instalan las dependencias:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+**Operación 3 — Cargue de los vehículos** (los datos sintéticos se generan dentro de los scripts, con semilla fija):
+
+```bash
+cd src/cargue_vehiculos
+python pruebas.py
+python medicion.py
+```
+
+`pruebas.py` tarda menos de un segundo. `medicion.py` tarda unos 2 minutos, imprime todas las tablas y estimaciones de la sección 4.1 y guarda `tiempo_vs_n.png`, `operaciones_vs_n.png` y `tiempo_vs_capacidad.png` en `graficas/cargue_vehiculos/`.
 
 ---
 
