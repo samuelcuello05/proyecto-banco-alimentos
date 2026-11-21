@@ -14,6 +14,8 @@
 | Laboratorio 4 (15 %) | Miércoles 18 de noviembre de 2026 | Operación 3 — Cargue de los vehículos (programación dinámica) |
 | Proyecto final (20 %) | Lunes 23 de noviembre de 2026 | Operación 4 — Saturación de la bodega, análisis del proceso completo, implicaciones e informe en PDF |
 
+El mismo informe está en PDF: [informe-tecnico.pdf](informe-tecnico.pdf).
+
 ---
 
 # 1. Análisis del problema
@@ -736,7 +738,27 @@ El ahorro eléctrico de las dos operaciones es modesto en valor absoluto: el com
 
 # 7. Conclusiones
 
-**Pendiente para la entrega del 23 de noviembre.**
+### Principales hallazgos
+
+1. **La regla actual de cargue es rápida pero deja alimento en la bodega.** En el contraejemplo pierde el 57 % del valor, y en los datos sintéticos calibrados con el 78 % del cliente logra en promedio el 35 % del valor posible. La programación dinámica garantiza el máximo (verificado contra la exhaustiva en 40 instancias y dentro de la medición) en 1,92 s por día, el 0,03 % de la ventana.
+2. **El costo de la programación dinámica depende de la capacidad W**, y las mediciones lo muestran: con n fijo, duplicar W duplica las celdas, y el tiempo crece algo más (×2,08 a ×2,35) por la caché.
+3. **La exhaustiva sirve para verificar, pero no para producción:** cada lote adicional duplica su tiempo (×2,14 medido), y con rutas reales tardaría más que la edad del universo.
+4. **En la operación 4, Kadane (Θ(n)) resuelve en 0,12 s** lo que la fuerza bruta resuelve en 22,6 minutos en su versión más favorable (y en más de un día según el cliente).
+5. **El ahorro eléctrico es modesto (≈ 43 kWh al año); el impacto grande es social y ambiental:** alimento que sí sale, a tiempo, hacia quien lo necesita.
+
+### Lecciones aprendidas
+
+* Una regla voraz que acierta en muchas instancias no es una regla correcta: hay que buscar su contraejemplo, y la comparación con la solución exhaustiva lo encuentra.
+* La complejidad teórica se confirmó con mediciones, pero también aparecieron efectos que la teoría no muestra (la caché con W grande, los costos fijos con n pequeño) y que se explicaron con datos.
+* Interpretar el caso es parte del problema: cómo se detiene la regla actual, qué hace hoy la fuerza bruta o cómo generar datos que reproduzcan el 78 % cambian las conclusiones. Por eso cada interpretación quedó escrita como supuesto.
+
+### Recomendaciones para futuras mejoras
+
+1. **Operaciones 1 y 2, para recuperar la ventana:** una tabla hash para la consulta por código (Θ(1) en promedio) y un árbol de búsqueda equilibrado para la consulta por rango de vencimiento (Θ(log n + k)), como en el Laboratorio 3. Para el FEFO, ordenar solo los 6.000 – 9.000 lotes nuevos (Θ(k log k)) y **mezclarlos** con la lista ya ordenada (Θ(n + k)), en lugar del ordenamiento por inserción (Θ(n·k)).
+2. **Incluir la urgencia de vencimiento y la prioridad de la población** en el valor de los lotes, o manejar lotes obligatorios, con reglas que decida la Dirección.
+3. **Optimizar la memoria de la PD** (una fila más bits de decisión) si la capacidad o el número de lotes crecen.
+4. **Planear los vehículos en conjunto:** si un lote puede ir en varias rutas, el problema es una mochila múltiple, y conviene estudiarlo.
+5. **Validar con datos reales del banco** el valor nutricional de los lotes y la frecuencia del análisis de saturación.
 
 ---
 
@@ -790,4 +812,16 @@ python medicion.py
 
 # Referencias
 
-**Pendiente para la entrega del 23 de noviembre.**
+* Material del curso: lecciones "Fundamentos de programación dinámica", "Estrategia voraz", "Programación dinámica: decidir, verificar y medir", "Subarreglo máximo y Strassen", y la guía "Complemento del Laboratorio 4 — Mochila 0/1".
+* Cormen, T. H., Leiserson, C. E., Rivest, R. L. y Stein, C. *Introduction to Algorithms*, 3.ª ed. MIT Press. Capítulo 4 (subarreglo máximo y método maestro), capítulos 15 y 16 (programación dinámica y algoritmos voraces).
+* Kleinberg, J. y Tardos, É. *Algorithm Design*. Pearson. Sección 6.4 (Subset Sums and Knapsacks).
+* Congreso de Colombia. [Ley 1990 de 2019](https://normograma.invima.gov.co/normograma/compilacion/docs/ley_1990_2019.htm), política para prevenir la pérdida y el desperdicio de alimentos.
+* Ministerio de Salud y Protección Social. [Resolución 2674 de 2013](https://normograma.invima.gov.co/compilacion/docs/resolucion_minsaludps_2674_2013.htm), requisitos sanitarios para alimentos.
+* Ministerio de la Protección Social. [Resolución 5109 de 2005](https://normograma.invima.gov.co/normograma/compilacion/docs/resolucion_minproteccion_5109_2005.htm), rotulado de alimentos.
+* Comisión del Codex Alimentarius. [CXG 60-2006](https://www.fao.org/input/download/standards/10603/CXG_060e.pdf), principios para la rastreabilidad o rastreo de productos.
+* Congreso de Colombia. [Ley 1581 de 2012](https://www.alcaldiabogota.gov.co/sisjur/normas/Norma1.jsp?i=49981), protección de datos personales.
+* Congreso de Colombia. [Ley 1098 de 2006](https://normas.cra.gov.co/gestor/docs/ley_1098_2006.htm), Código de la Infancia y la Adolescencia.
+* Congreso de Colombia. [Ley 842 de 2003](https://www1.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=40907), ejercicio de la ingeniería y Código de Ética Profesional.
+* ACM. [ACM Code of Ethics and Professional Conduct](https://www.acm.org/code-of-ethics) (2018).
+* PNUMA. [Índice de desperdicio de alimentos 2021](https://www.unep.org/es/resources/informe/indice-de-desperdicio-de-alimentos-2021) (meta 12.3 de los ODS).
+* UPME. [Factores de emisión del SIN 2024](https://docs.upme.gov.co/SIMEC/Cambio-Climatico/Documents/Calculo-FE-del-SIN/Factores_de_emision_SIN_2024.pdf).
