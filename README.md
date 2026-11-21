@@ -20,15 +20,38 @@
 
 ## 1.1 Descripción del problema computacional
 
-**Pendiente para la entrega del 23 de noviembre.**
+El Banco Regional de Alimentos recibe alimentos donados (muchos próximos a vencer) y los distribuye a 420 organizaciones beneficiarias. Cada madrugada un proceso planea los despachos del día: consulta el inventario (operación 1), lo ordena por vencimiento (operación 2) y decide qué lotes sube a cada vehículo (operación 3). Esa planeación debe terminar en la ventana de **2 horas (03:00 – 05:00)**, pero hoy tarda **cerca de 4,5 horas**: los vehículos salen tarde y parte de los perecederos se vence en la bodega. Aparte, la Dirección quiere un análisis histórico (operación 4) que hoy tarda más de un día.
+
+El problema computacional es escoger, para cada operación, una estrategia algorítmica que dé el resultado **exacto** que exigen las restricciones del negocio en el tiempo disponible, en un único computador de escritorio de **150 W**, sin paralelismo. Este informe trabaja dos operaciones: la **3 (cargue de los vehículos)**, que se resuelve con programación dinámica, y la **4 (saturación de la bodega)**, que se resuelve con dividir y vencer y con el algoritmo de Kadane.
 
 ## 1.2 Operaciones críticas del proceso
 
-**Pendiente para la entrega del 23 de noviembre.**
+Para ordenar las operaciones por costo se cuenta cuántos pasos elementales hace la estrategia actual con el volumen real. Un paso elemental (comparar o sumar dentro de un ciclo de Python) cuesta en nuestro equipo unos **52 ns**, el costo por tramo medido en la operación 4 (sección 4.2.4).
+
+| Operación | Estrategia actual | Volumen real | Pasos elementales | Restricción clave |
+| --- | --- | --- | --- | --- |
+| 1. Consulta de inventario | Recorre la lista completa por cada consulta | 220.000 lotes activos; ≈ 30.000 consultas por código al día y consultas por rango | Θ(n) por consulta: ≈ 30.000 × 110.000 ≈ 3,3·10⁹ por día | Consulta por código en menos de 1 s; la consulta por rango entra en la ventana |
+| 2. Ordenamiento FEFO | Inserción sobre la lista de ayer con 6.000 – 9.000 lotes nuevos al final | n ≈ 220.000, k ≤ 9.000 | Θ(n·k): cada lote nuevo retrocede en promedio n/2 posiciones, ≈ 10⁹ desplazamientos por día | Dentro de la ventana; lo que vence primero sale primero |
+| 3. Cargue de los vehículos | Cargar por vencimiento hasta que el siguiente lote no cabe | 14 rutas de 300 – 600 lotes, vehículos de 2.500 – 4.000 kg | Θ(n log n): unos 10⁴ por día | Valor nutricional **máximo** sin superar la capacidad |
+| 4. Saturación de la bodega | Evalúa todos los tramos de horas | 40 categorías × 36.000 horas | Θ(n²): 40 × 6,5·10⁸ ≈ 2,6·10¹⁰ por ejecución (Θ(n³) si recalcula cada suma: ≈ 3,1·10¹⁴) | El tramo debe ser el de mayor crecimiento, no una aproximación |
+
+* **La operación más costosa es la 4**: en una sola ejecución hace unas 6 veces los pasos que hacen las otras tres en una noche, y el cliente reporta que tarda más de un día.
+* **Las operaciones 1 y 2 son las que llenan la ventana**: suman unos 4·10⁹ pasos por noche. A 52 ns por paso serían del orden de 4 minutos en Python, muy lejos de las 4,5 h que reporta el cliente. La diferencia indica que el proceso actual tiene costos que el caso no detalla (lectura de datos, otro lenguaje u otro equipo), así que para la línea base energética usamos las cifras del cliente.
+* **La operación 3 es la más barata en cómputo, pero la más cara en resultado**: los vehículos salen en promedio al 78 % de su capacidad y la carga no es la de mayor valor nutricional. Su problema no es la velocidad, sino que la regla no es óptima.
+
+**Operaciones seleccionadas:** la 3 (obligatoria, Laboratorio 4) y la 4 (la de mayor costo computacional). Las dos son distintas del ordenamiento, y entre las estrategias hay programación dinámica (operación 3 y Kadane) y dividir y vencer (operación 4). Las operaciones 1 y 2 quedan como recomendación (sección 7).
 
 ## 1.3 Costo energético del proceso actual (línea base)
 
-**Pendiente para la entrega del 23 de noviembre.**
+La energía es potencia por tiempo: **kWh = kW × h**, con los 150 W del computador = 0,15 kW. El año de operación del banco tiene **300 días** (dato del caso).
+
+| Proceso actual | Tiempo | Energía por ejecución | Ejecuciones por año | Energía por año |
+| --- | --- | --- | --- | --- |
+| Planeación (operaciones 1 a 3), dato del cliente | ≈ 4,5 h por día | 4,5 h × 0,15 kW = 0,675 kWh | 300 | **202,5 kWh** |
+| Operación 4, dato del cliente | más de 1 día (≥ 24 h) | ≥ 24 h × 0,15 kW = 3,6 kWh | 12 (supuesto: una vez al mes) | **≥ 43,2 kWh** |
+| **Línea base total** | | | | **≥ 245,7 kWh por año** |
+
+Con el factor de emisión del Sistema Interconectado Nacional de 2024 (0,220 kg CO₂e por kWh, UPME), la línea base equivale a unos 54 kg de CO₂e al año. Es poco, comparado con el CO₂ del alimento que se vence: el propio banco estima **2,5 kg de CO₂e por cada kilogramo desechado**. Esa diferencia de escala es la que guía el análisis de las implicaciones (sección 6).
 
 ## 1.4 Operación 3 — Cargue de los vehículos: entradas, salida y restricciones
 
@@ -44,7 +67,15 @@ Para cada ruta hay que escoger qué lotes candidatos suben al vehículo para que
 
 ## 1.5 Operación 4 — Saturación de la bodega: entradas, salida y restricciones
 
-**Pendiente para la entrega del 23 de noviembre.**
+Para cada categoría de producto se registra, por cada hora de operación, el cambio neto del inventario en kilogramos (lo que entró menos lo que salió o se descartó, que puede ser negativo). Hay que encontrar el tramo de horas consecutivas en que más creció el inventario, para dimensionar el cuarto frío que se alquilará en temporada. Es el problema del **subarreglo de suma máxima**; el tamaño es **n**, el número de horas de la serie.
+
+| Elemento | Descripción |
+| --- | --- |
+| Entradas | `serie`: lista de n enteros, el cambio neto del inventario de una categoría en cada hora, en kg. |
+| Volumen real | 40 categorías; 12 horas × 300 días × 10 años ≈ **36.000 horas por categoría**. |
+| Salida | `(suma_kg, inicio, fin)`: el crecimiento acumulado máximo y las horas (índices inclusivos) del tramo. |
+| Restricciones | (1) El tramo reportado es el de **mayor** crecimiento acumulado, no una aproximación. (2) La serie original no se modifica. (3) Un único hilo, en el mismo computador de 150 W. |
+| Estrategia actual | Evalúa todos los tramos posibles; según el cliente, tarda más de un día para las 40 categorías. |
 
 ## 1.6 Supuestos
 
@@ -60,7 +91,11 @@ Para cada ruta hay que escoger qué lotes candidatos suben al vehículo para que
 
 ### Operación 4
 
-**Pendiente para la entrega del 23 de noviembre.**
+1. **Interpretación de la estrategia actual:** tomamos la más favorable al programa actual, una fuerza bruta que acumula la suma de cada tramo a partir de la del tramo anterior, Θ(n²). Si el programa recalculara cada suma desde cero sería Θ(n³), y con nuestro costo por paso tardaría unos 188 días para las 40 categorías (sección 4.2.5), lo que encaja mejor con el "más de un día" del cliente. Usamos la versión Θ(n²) para no inflar la mejora.
+2. **El tramo no es vacío:** si todas las horas son negativas (el inventario nunca creció), se reporta la hora con la caída más pequeña. Una serie vacía es un error (`ValueError`).
+3. **Desempates:** varios tramos pueden tener la misma suma máxima. La restricción del negocio es sobre la suma, así que las pruebas comparan sumas y verifican que cada tramo devuelto sume lo que reporta.
+4. **Frecuencia y ventana:** el caso no fija ventana para este análisis. Suponemos que se ejecuta **una vez al mes** (12 veces al año) para actualizar el dimensionamiento del cuarto frío, y tomamos como referencia la misma **ventana de 2 horas** del computador: si cabe ahí, cabe en cualquier horario sin competir con la planeación.
+5. **Datos sintéticos:** el costo de las tres estrategias depende solo de n, no de los valores de la serie, así que los datos sintéticos no sesgan los tiempos (sección 4.2.3).
 
 ---
 
@@ -68,7 +103,16 @@ Para cada ruta hay que escoger qué lotes candidatos suben al vehículo para que
 
 ## 2.1 Estructuras de datos seleccionadas
 
-**Pendiente para la entrega del 23 de noviembre.**
+| Operación | Estructura | Por qué |
+| --- | --- | --- |
+| 3 | Lista de tuplas `(peso_kg, valor, dias_para_vencer)` | Las tuplas son inmutables: ninguna función puede alterar el registro de un lote (trazabilidad). La lista da acceso por índice en Θ(1), y ese índice identifica al lote en la salida. |
+| 3 | Tabla K de (n + 1) × (W + 1) enteros (lista de listas) | Acceso Θ(1) a K[i][w]. La fila i solo lee la fila i − 1, y la tabla completa permite reconstruir qué lotes suben. |
+| 3 | Lista de índices de los lotes elegidos | Es la salida que pide la operación, sin copiar los lotes. |
+| 4 | Lista de enteros (la serie) | Acceso por índice en Θ(1); nunca se copia ni se modifica. |
+| 4 | Pares de índices `(inicio, fin)` en divide y vencerás | Cada llamada recibe un rango, no una copia de la mitad. Se ahorran Θ(n log n) copias y la pila tiene solo ⌈log₂ n⌉ ≈ 16 niveles con 36.000 horas. |
+| 4 | Tres variables (suma actual, inicio actual, mejor tramo) en Kadane | La recurrencia solo necesita el valor de la hora anterior: memoria extra Θ(1). |
+
+Para la tabla K se consideró guardar una sola fila de valores más una tabla de bits de decisión (Θ(W) enteros y n·W bits), que recortaría la memoria en más de un orden de magnitud. No se adoptó porque la tabla completa es la que se explica y se verifica a mano, y con el volumen real ocupa 21,7 MiB (sección 4.1.1). Queda como mejora si la capacidad crece (sección 6.4).
 
 ## 2.2 Operación 3: mochila 0/1 por programación dinámica
 
@@ -183,7 +227,85 @@ El ahorro que importa está en el alimento. En los datos sintéticos, los mismos
 
 ## 2.3 Operación 4: tramo de mayor crecimiento del inventario
 
-**Pendiente para la entrega del 23 de noviembre.**
+### Por qué el problema admite dividir y vencer
+
+El mejor tramo de un rango de horas está en una de tres partes: **completo en la mitad izquierda**, **completo en la mitad derecha** o **cruzando el centro**. Los dos primeros casos son el mismo problema con la mitad de horas. Esos subproblemas son **independientes**: no comparten horas, así que no se repiten. Por eso la estrategia es dividir y vencer y no programación dinámica. El caso que cruza se resuelve en Θ(n): desde el centro se extiende el tramo hacia la izquierda y hacia la derecha, guardando la mejor suma de cada lado.
+
+```text
+T(n) = 2·T(n/2) + Θ(n)     →   método maestro, caso 2 (a = 2, b = 2, f(n) = Θ(n^log₂2))   →   T(n) = Θ(n log n)
+```
+
+### Kadane: una programación dinámica de un solo recorrido
+
+M[j] = la mejor suma de un tramo que **termina exactamente** en la hora j.
+
+```text
+M[0] = serie[0]
+M[j] = max( serie[j],  M[j-1] + serie[j] )        respuesta: max_j M[j]
+```
+
+Un tramo que termina en j es solo la hora j o extiende un tramo que termina en j − 1, y en ese caso conviene que sea el mejor (subestructura óptima). Como M[j] solo usa M[j − 1], basta guardar el último valor: **Θ(n) en tiempo y Θ(1) en memoria extra**. En palabras: si lo acumulado hasta la hora anterior es negativo, arrastrarlo solo resta, así que el tramo vuelve a empezar.
+
+### Ejemplo resuelto a mano
+
+Ocho horas de una categoría (kg por hora), índices 0 a 7: `[-120, 340, -60, 250, -400, 180, 260, -90]`.
+
+**Divide y vencerás** (árbol de llamadas; cada nodo devuelve el mejor de izquierda, derecha y cruzado):
+
+```text
+[0..7]  max(izq 530, der 440, cruzado 570) = 570, horas 1–6
+├── [0..3]  max(340, 250, cruzado 530) = 530, horas 1–3
+│   ├── [0..1]  max(-120, 340, cruzado 220) = 340, hora 1
+│   └── [2..3]  max(-60, 250, cruzado 190) = 250, hora 3
+└── [4..7]  max(180, 260, cruzado 440) = 440, horas 5–6
+    ├── [4..5]  max(-400, 180, cruzado -220) = 180, hora 5
+    └── [6..7]  max(260, -90, cruzado 170) = 260, hora 6
+```
+
+El cruzado de la raíz: hacia la izquierda desde la hora 3 las sumas son 250, 190, **530** y 410 (la mejor llega hasta la hora 1); hacia la derecha desde la hora 4 son −400, −220, **40** y −50 (la mejor llega hasta la hora 6). En total, 530 + 40 = **570**. Gana el tramo que **cruza el centro**, aunque cada mitad por separado dé menos (530 y 440).
+
+**Kadane** (una pasada):
+
+| j | serie[j] | M[j − 1] | M[j] | Inicio del tramo actual | Mejor hasta j |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 0 | −120 | — | −120 | 0 | −120 (hora 0) |
+| 1 | 340 | −120 | 340 (reinicia) | 1 | 340 (hora 1) |
+| 2 | −60 | 340 | 280 | 1 | 340 |
+| 3 | 250 | 280 | 530 | 1 | 530 (horas 1–3) |
+| 4 | −400 | 530 | 130 | 1 | 530 |
+| 5 | 180 | 130 | 310 | 1 | 530 |
+| 6 | 260 | 310 | 570 | 1 | **570 (horas 1–6)** |
+| 7 | −90 | 570 | 480 | 1 | 570 |
+
+Las dos estrategias coinciden: entre la hora 1 y la hora 6 el inventario creció **570 kg**, y esa es la acumulación que el cuarto frío debe absorber.
+
+### Pseudocódigo
+
+```text
+FUERZA_BRUTA(serie):                       # el programa actual, Θ(n²)
+    para i en 0..n-1:
+        suma ← 0
+        para j en i..n-1:  suma ← suma + serie[j];  actualizar el mejor (i, j)
+
+TRAMO_MAXIMO(serie, inicio, fin):          # dividir y vencer, Θ(n log n)
+    si inicio = fin: devolver (serie[inicio], inicio, fin)
+    medio ← (inicio + fin) // 2
+    izq ← TRAMO_MAXIMO(serie, inicio, medio)
+    der ← TRAMO_MAXIMO(serie, medio + 1, fin)
+    cruzado ← SUMA_CRUZADA(serie, inicio, medio, fin)    # Θ(n)
+    devolver el de mayor suma entre izq, der y cruzado
+
+KADANE(serie):                             # programación dinámica, Θ(n)
+    actual ← mejor ← serie[0]
+    para j en 1..n-1:
+        si actual < 0: actual ← serie[j] (el tramo empieza en j)
+        si no:         actual ← actual + serie[j]
+        si actual > mejor: mejor ← actual (y se guarda el tramo)
+```
+
+### Cómo reduce el consumo energético
+
+Con 36.000 horas, la fuerza bruta evalúa 6,5·10⁸ tramos por categoría; dividir y vencer recorre 5,8·10⁵ elementos y Kadane visita 36.000. Son unas 1.100 y 18.000 veces menos operaciones, respectivamente. Como la energía es proporcional al tiempo, el consumo baja en la misma proporción (sección 6.1).
 
 ---
 
