@@ -638,11 +638,31 @@ En el caso real los lotes son indivisibles y de pesos muy distintos, así que ha
 
 ## 5.2 Operación 4 — Saturación de la bodega
 
-**Pendiente para la entrega del 23 de noviembre.**
+| Criterio | Fuerza bruta (actual) | Divide y vencerás | Kadane |
+| --- | --- | --- | --- |
+| Da el tramo de mayor crecimiento | Sí | Sí | Sí |
+| Complejidad (tiempo / memoria extra) | Θ(n²) / Θ(1) | Θ(n log n) / Θ(log n) | **Θ(n) / Θ(1)** |
+| 40 categorías × 36.000 h (medido) | 22,6 min (más de 1 día según el cliente) | 2,83 s | **0,12 s** |
+| Con el doble de historia | ≈ 90 min (estimado) | 5,74 s | 0,24 s |
+| Ventajas | Simple; sirve de referencia para verificar | Las dos mitades son independientes: se podría paralelizar si algún día hay más núcleos | La más rápida y la más simple de mantener; memoria constante |
+| Limitaciones | Cuadrática: el costo crece con el cuadrado de la historia | Recursiva y con más código; constante mayor que Kadane | Hay que entender por qué reiniciar con suma negativa es correcto (sección 2.3) |
+
+**Recomendación: Kadane** para la operación 4. Da el mismo tramo exacto que la fuerza bruta (verificado), es 10.969 veces más rápido y no necesita memoria adicional. Divide y vencerás queda como alternativa válida, y la fuerza bruta solo como referencia en las pruebas.
 
 ## 5.3 Comparación entre las operaciones y solución recomendada
 
-**Pendiente para la entrega del 23 de noviembre.**
+| | Operación 3 — Cargue | Operación 4 — Saturación |
+| --- | --- | --- |
+| Problema | Mochila 0/1 | Subarreglo de suma máxima |
+| Estrategia actual | Voraz por vencimiento, Θ(n log n): rápida pero **no óptima** | Fuerza bruta, Θ(n²): óptima pero **lenta** |
+| Estrategia recomendada | **Programación dinámica, Θ(n·W)** | **Kadane, Θ(n)** (programación dinámica) |
+| Alternativas descartadas | Exhaustiva (exacta, pero no termina); densidad (rápida, pero no exacta) | Divide y vencerás (exacta, pero 23 veces más lenta que Kadane) |
+| Qué mejora | La **calidad** del resultado: +8.381 kg y 2,8 veces el valor por día | La **velocidad**: de 22,6 min (o más de un día) a 0,12 s |
+| Costo en tiempo | Sube de 0,9 ms a 1,92 s por día | Baja de 1.356 s a 0,12 s por ejecución |
+
+* **Por qué estas estrategias para este caso:** en la operación 3 la restricción exige el máximo con lotes indivisibles, así que las voraces quedan descartadas (contraejemplo de la sección 5.1). Entre las exactas, la exhaustiva es exponencial. La PD es pseudo-polinomial, y aquí eso no es un problema: W es pequeña (como mucho 4.000 kg), y aun en el peor día el tiempo estimado cabe unas 1.900 veces en la ventana. En la operación 4, las tres estrategias son exactas, así que decide la complejidad: Θ(n) es lo mínimo posible, porque hay que leer cada hora al menos una vez.
+* **Las dos operaciones muestran las dos caras del análisis de algoritmos:** cambiar una estrategia rápida pero incorrecta por una algo más cara que sí cumple la restricción (operación 3), y cambiar una correcta pero cara por una igual de correcta y mucho más barata (operación 4).
+* **Para que la planeación vuelva a caber en la ventana de 2 horas**, el siguiente paso son las operaciones 1 y 2 (sección 7).
 
 ---
 
@@ -668,19 +688,49 @@ Energía = 0,15 kW × tiempo en horas. Los tiempos por día son los medidos con 
 
 ### Operación 4 y proceso completo
 
-**Pendiente para la entrega del 23 de noviembre.**
+| Operación 4, 12 ejecuciones al año | Tiempo por ejecución | kWh por ejecución | kWh por año |
+| --- | ---: | ---: | ---: |
+| Fuerza bruta, dato del cliente (más de 1 día) | ≥ 24 h | ≥ 3,6 | **≥ 43,2** |
+| Fuerza bruta Θ(n²), medida en este equipo | 22,6 min | 0,0565 | 0,678 |
+| Divide y vencerás | 2,83 s | 1,2·10⁻⁴ | 0,0014 |
+| Kadane | 0,12 s | 5,2·10⁻⁶ | **0,00006** |
+
+| Proceso | Línea base (sección 1.3) | Con la propuesta | Diferencia por año |
+| --- | ---: | ---: | ---: |
+| Operación 3 (dentro de la planeación) | (incluida en los 202,5 kWh) | +0,024 kWh | +0,024 kWh |
+| Operación 4 | ≥ 43,2 kWh | 0,00006 kWh | **≈ −43,2 kWh** |
+| Total de lo trabajado | | | **≈ −43,2 kWh al año (≈ −9,5 kg de CO₂e)** |
+
+El ahorro eléctrico de las dos operaciones es modesto en valor absoluto: el computador consume poco. Los 202,5 kWh al año de la planeación solo se reducen atacando las operaciones 1 y 2. Si cupieran en la ventana, la planeación consumiría como mucho 0,3 kWh por día, unos 90 kWh al año: **≥ 112 kWh al año menos** (sección 7). El impacto ambiental más grande sigue siendo el alimento que deja de vencerse.
 
 ## 6.2 Personas: quién asume el costo cuando el algoritmo se equivoca o llega tarde
 
-**Pendiente para la entrega del 23 de noviembre.**
+* **Un jardín infantil que nunca queda en el cargue óptimo.** La programación dinámica maximiza el valor nutricional **total** de cada ruta, no el de cada organización. Si los lotes que necesita un jardín infantil pesan mucho para su valor, la PD los dejará por fuera una y otra vez, y el costo lo asumen niños que no reciben su ración. **Mitigación desde el diseño:** (1) el valor de cada lote es una decisión de política del banco, no del algoritmo, y puede incluir la prioridad de la población que lo recibe (por ejemplo, un multiplicador para jardines infantiles y hogares de adultos mayores); (2) los lotes comprometidos con organizaciones prioritarias se suben primero, como obligatorios, y la PD se aplica a la capacidad restante; (3) un reporte mensual del valor recibido por cada organización, con alerta cuando alguna quede por debajo de un mínimo. Quién fija esos pesos debe decidirlo la Dirección de Operaciones junto con las organizaciones, no el equipo técnico.
+* **Un lote vencido que se despacha por un error del ordenamiento FEFO.** Puede enfermar a personas vulnerables (niños, adultos mayores), y el costo lo asumen ellas y, después, el banco (responsabilidad sanitaria y confianza de los donantes). **Mitigación:** los lotes vencidos se filtran **antes** de la PD como condición dura (supuesto 2 de la sección 1.6); la PD nunca "elige" un lote vencido porque nunca lo recibe; el registro de cada lote no se modifica, para poder retirar un producto si hace falta.
+* **Lotes que la PD deja y se vencen.** Optimizar el valor de hoy puede dejar en la bodega un lote que vence mañana (L0 en el ejemplo). La mitigación es la misma: urgencia en el valor o lotes obligatorios.
+* **Cuando el algoritmo llega tarde**, los vehículos salen tarde y las organizaciones reciben después de preparar sus comidas: hay personas que ese día no comen. La PD tarda 2 segundos, pero el retraso actual viene de las operaciones 1 y 2.
+* **Operación 4:** un tramo mal calculado lleva a un cuarto frío demasiado pequeño (alimento que se daña) o demasiado grande (dinero que no llega a comida). Por eso la restricción exige el tramo exacto, verificado contra la fuerza bruta.
 
 ## 6.3 Marco normativo y buenas prácticas
 
-**Pendiente para la entrega del 23 de noviembre.**
+| Norma o buena práctica | Qué exige | Cómo la respeta el diseño |
+| --- | --- | --- |
+| **Ley 1990 de 2019** — política contra la pérdida y el desperdicio de alimentos ([texto](https://normograma.invima.gov.co/normograma/compilacion/docs/ley_1990_2019.htm)) | Prevenir y reducir las pérdidas y el desperdicio de alimentos; la reducción es la primera prioridad | Cada vehículo sale lleno con la carga de mayor valor; la urgencia de vencimiento se puede incorporar al valor (sección 6.2) |
+| **Resolución 2674 de 2013**, Ministerio de Salud ([texto](https://normograma.invima.gov.co/compilacion/docs/resolucion_minsaludps_2674_2013.htm)) | Requisitos sanitarios para quien almacena, transporta y distribuye alimentos | Ningún lote vencido entra a la PD; el orden FEFO se mantiene en la operación 2; ningún vehículo supera su capacidad |
+| **Resolución 5109 de 2005**, rotulado ([texto](https://normograma.invima.gov.co/normograma/compilacion/docs/resolucion_minproteccion_5109_2005.htm)) | La fecha de vencimiento es la del fabricante y no se altera | El sistema usa la fecha como dato de entrada y nunca la modifica |
+| **Codex Alimentarius CXG 60-2006**, rastreabilidad ([texto](https://www.fao.org/input/download/standards/10603/CXG_060e.pdf)) | Poder seguir un alimento por las etapas de distribución | Cada lote conserva su código; las funciones devuelven índices y nunca modifican los registros (comprobado en las pruebas) |
+| **Ley 1581 de 2012**, art. 7 ([texto](https://www.alcaldiabogota.gov.co/sisjur/normas/Norma1.jsp?i=49981)), y **Ley 1098 de 2006**, art. 8, interés superior del menor ([texto](https://normas.cra.gov.co/gestor/docs/ley_1098_2006.htm)) | Tratamiento restringido de los datos personales de niños, niñas y adolescentes, con prevalencia de sus derechos | Las dos operaciones trabajan solo con datos de lotes, capacidades e inventario; no necesitan los listados de población beneficiaria (minimización de datos) |
+| **Ley 842 de 2003**, Código de Ética de la ingeniería ([texto](https://www1.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=40907)) y **Código de Ética de la ACM**, principio 1.2, "evitar el daño" ([texto](https://www.acm.org/code-of-ethics)) | Responsabilidad profesional; prever y minimizar el daño | Verificación contra soluciones exactas, supuestos explícitos y riesgos documentados para quien decide (secciones 5.1 y 6.2) |
+| **ODS 12.3** ([PNUMA, Índice de desperdicio de alimentos](https://www.unep.org/es/resources/informe/indice-de-desperdicio-de-alimentos-2021)) | Reducir a la mitad el desperdicio de alimentos y reducir las pérdidas en las cadenas de suministro para 2030 | Más alimento por viaje y menos alimento vencido en la bodega |
+| **Factor de emisión del SIN 2024**, UPME ([documento](https://docs.upme.gov.co/SIMEC/Cambio-Climatico/Documents/Calculo-FE-del-SIN/Factores_de_emision_SIN_2024.pdf)) | 0,220 t CO₂e por MWh (0,220 kg por kWh) para estimar emisiones por consumo eléctrico | Se usa para convertir los kWh de la sección 6.1 |
+
+**Trazabilidad de los datos originales:** ninguna de las siete funciones de las dos operaciones modifica la lista que recibe (las pruebas lo comprueban con una copia), los lotes se representan con tuplas inmutables y la salida son índices que remiten al registro original.
 
 ## 6.4 Crecimiento: una segunda bodega con el doble de lotes y de vehículos
 
-**Pendiente para la entrega del 23 de noviembre.**
+* **Operación 3:** con 28 vehículos y hasta 1.200 lotes por ruta, las celdas por día se multiplican por 4 (Θ(n·W) por ruta, y el doble de rutas). A 73,5–111,3 ns por celda, el peor día pasaría de 3,7 s a unos **15 s**, que sigue siendo el 0,2 % de la ventana, y la energía a ≈ 0,19 kWh al año. La memoria por ruta pasaría de 21,7 a 40,3 MiB (medido con `tracemalloc`). Si además los vehículos fueran de 8.000 kg, cada ruta costaría el doble otra vez (83,7 MiB): el riesgo está en W, y ahí conviene la versión de una fila más bits. La exhaustiva sigue siendo imposible y las voraces siguen sin garantizar el máximo.
+* **Operación 4:** la historia crece unas 3.600 horas por año y por categoría. Con el doble de datos, Kadane pasa de 0,12 a 0,24 s (medido) y la fuerza bruta de 22,6 a ≈ 90 minutos (×4, estimado); en 30 años de historia la fuerza bruta superaría las 3 horas y Kadane seguiría por debajo de 1 segundo.
+* **Sostenibilidad:** las dos estrategias recomendadas crecen de forma lineal con lo que importa (lotes y capacidad, u horas de historia), así que absorben la segunda bodega sin cambiar de computador ni de paradigma. La regla actual de cargue escala bien en tiempo, pero su error crece con el volumen: más lotes y más vehículos al 78 % significan más alimento que no sale.
 
 ---
 
