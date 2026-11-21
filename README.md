@@ -336,7 +336,18 @@ Con 36.000 horas, la fuerza bruta evalúa 6,5·10⁸ tramos por categoría; divi
 
 ## 3.3 Operación 4 — Saturación de la bodega
 
-**Pendiente para la entrega del 23 de noviembre.**
+**Código:** [regla_actual.py](src/saturacion_bodega/regla_actual.py) · [divide_y_venceras.py](src/saturacion_bodega/divide_y_venceras.py) · [kadane.py](src/saturacion_bodega/kadane.py) · [pruebas.py](src/saturacion_bodega/pruebas.py)
+
+* [regla_actual.py](src/saturacion_bodega/regla_actual.py): `tramo_fuerza_bruta`, la fuerza bruta que acumula la suma, en la interpretación más favorable al programa actual.
+* [divide_y_venceras.py](src/saturacion_bodega/divide_y_venceras.py): `suma_cruzada`, `tramo_maximo_contando` (la recursión sobre `inicio..fin`) y `tramo_divide_y_venceras` (toda la serie). Se adaptó del subarreglo máximo del Laboratorio 2.
+* [kadane.py](src/saturacion_bodega/kadane.py): `tramo_kadane`, un solo recorrido con tres variables.
+
+**Decisiones de implementación:**
+
+* Las tres funciones devuelven el mismo formato `(suma_kg, inicio, fin)`, con índices inclusivos, para compararlas directamente. Las tres lanzan `ValueError` con una serie vacía.
+* Divide y vencerás trabaja con índices y nunca recorta la lista, así que no hace copias y la serie queda intacta. Su recursión baja ⌈log₂ 36.000⌉ = 16 niveles, lejos del límite de recursión de Python.
+* Igual que en la operación 3, cada estrategia tiene su variante `..._contando`: tramos evaluados en la fuerza bruta (una suma por fila i), elementos recorridos en divide y vencerás (los de cada suma cruzada más uno por caso base) y elementos visitados en Kadane.
+* Desempates: la fuerza bruta y Kadane conservan el primer tramo encontrado; divide y vencerás prefiere la mitad izquierda, luego la derecha y por último el cruzado.
 
 ---
 
@@ -490,7 +501,89 @@ Experimento 4: 5 días simulados × 14 rutas reales, es decir, 70 rutas con 300 
 
 ## 4.2 Operación 4 — Saturación de la bodega
 
-**Pendiente para la entrega del 23 de noviembre.**
+### 4.2.1 Complejidad temporal y espacial
+
+| Estrategia | Tiempo | Memoria extra | De dónde sale |
+| --- | --- | --- | --- |
+| Fuerza bruta (actual) | **Θ(n²)** | Θ(1) | n(n + 1)/2 tramos, cada uno en Θ(1) porque la suma se acumula |
+| Divide y vencerás | **Θ(n log n)** | Θ(log n) | T(n) = 2T(n/2) + Θ(n), por el método maestro (caso 2); la pila de recursión tiene log₂ n niveles |
+| Kadane | **Θ(n)** | Θ(1) | Un recorrido; M[j] solo usa M[j − 1] |
+
+### 4.2.2 Verificación
+
+[pruebas.py](src/saturacion_bodega/pruebas.py) (script con `assert`):
+
+| Caso | Qué se comprueba |
+| --- | --- |
+| Serie vacía | Las tres lanzan `ValueError` |
+| Un elemento | `[7]`, `[-7]` y `[0]` devuelven el mismo elemento en la hora 0 |
+| Todos negativos | `[-80, -30, -60, -20, -50]` da `(-20, 3, 3)`: la caída más pequeña |
+| Todos positivos | `[40, 10, 70]` da `(120, 0, 2)`: toda la serie |
+| Ejemplo a mano (sección 2.3) | Las tres dan `(570, 1, 6)`; las mitades dan 530 (horas 1–3) y 440 (horas 5–6), y `suma_cruzada` da 570: la respuesta solo puede salir del cruce |
+| Cruce obligado | Con `[-5, -1, -2, -6]`, `suma_cruzada` toma un elemento de cada lado (−3) aunque los dos sean negativos |
+| 30 series aleatorias (semilla 2026) | Largo de 1 a 80 y valores de −500 a 500: las tres dan la **misma suma**, el tramo devuelto suma lo que se reporta y la serie no cambia |
+| 10 series del generador de la medición | Largo de 1 a 600, con las mismas comprobaciones |
+
+```text
+Todas las pruebas pasaron (40 series aleatorias con semilla 2026).
+```
+
+Además, en cada tamaño de la medición se verifica que las estrategias den la misma suma antes de cronometrar; si no, se lanza `ValueError`.
+
+### 4.2.3 Cómo se midió
+
+**Código:** [datos.py](src/saturacion_bodega/datos.py) · [medicion.py](src/saturacion_bodega/medicion.py)
+
+* **Datos sintéticos** ([datos.py](src/saturacion_bodega/datos.py)): cambio neto por hora en kg, que entra más de lo que sale en las primeras 6 horas del día (+60 kg) y al revés en las últimas 6 (−60 kg), con una temporada anual de ±40 kg y ruido normal de 150 kg. Las tres estrategias hacen el mismo trabajo para cualquier serie de largo n (la fuerza bruta siempre evalúa n(n + 1)/2 tramos), así que los valores no sesgan los tiempos.
+* **Tamaños:** 1.125, 2.250, 4.500, 9.000, 18.000, **36.000** (el volumen real de una categoría) y 72.000 horas, cada uno el doble del anterior. La fuerza bruta se mide hasta 36.000 (33,9 s por serie); divide y vencerás y Kadane, hasta 72.000.
+* **Misma serie para las tres** en cada tamaño (semilla 2026). `time.perf_counter()` solo alrededor de la llamada y mediana de 3 repeticiones.
+* `medicion.py` tarda unos 2,5 minutos.
+
+### 4.2.4 Resultados
+
+| n (horas) | Fuerza bruta (s) | Divide y vencerás (ms) | Kadane (ms) | Tramos evaluados (fuerza bruta) | Elementos recorridos (DyV) | Elementos visitados (Kadane) |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1.125 | 0,034 | 1,87 | 0,099 | 633.375 | 12.577 | 1.125 |
+| 2.250 | 0,135 | 3,88 | 0,201 | 2.532.375 | 27.404 | 2.250 |
+| 4.500 | 0,534 | 8,05 | 0,389 | 10.127.250 | 59.308 | 4.500 |
+| 9.000 | 2,133 | 16,63 | 0,773 | 40.504.500 | 127.616 | 9.000 |
+| 18.000 | 8,452 | 34,01 | 1,579 | 162.009.000 | 273.232 | 18.000 |
+| 36.000 | 33,894 | 70,79 | 3,090 | 648.018.000 | 582.464 | 36.000 |
+| 72.000 | — | 143,38 | 5,993 | — | 1.236.928 | 72.000 |
+
+Con 36.000 horas, la fuerza bruta cuesta **52,3 ns por tramo evaluado** (33,894 s / 648.018.000 tramos).
+
+![Saturación de la bodega: tiempo vs. horas de la serie](graficas/saturacion_bodega/tiempo_vs_n.png)
+
+![Saturación de la bodega: operaciones vs. horas de la serie](graficas/saturacion_bodega/operaciones_vs_n.png)
+
+### 4.2.5 Lo medido contra lo esperado y escala real
+
+| n → 2n | Fuerza bruta (tiempo / operaciones) | Θ(n²) predice | DyV (tiempo / operaciones) | Θ(n log n) predice | Kadane (tiempo / operaciones) | Θ(n) predice |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1.125 → 2.250 | ×4,04 / ×4,00 | ×4 | ×2,07 / ×2,18 | ×2,20 | ×2,04 / ×2,00 | ×2 |
+| 2.250 → 4.500 | ×3,94 / ×4,00 | ×4 | ×2,08 / ×2,16 | ×2,18 | ×1,93 / ×2,00 | ×2 |
+| 4.500 → 9.000 | ×3,99 / ×4,00 | ×4 | ×2,07 / ×2,15 | ×2,16 | ×1,99 / ×2,00 | ×2 |
+| 9.000 → 18.000 | ×3,96 / ×4,00 | ×4 | ×2,05 / ×2,14 | ×2,15 | ×2,04 / ×2,00 | ×2 |
+| 18.000 → 36.000 | ×4,01 / ×4,00 | ×4 | ×2,08 / ×2,13 | ×2,14 | ×1,96 / ×2,00 | ×2 |
+| 36.000 → 72.000 | — | — | ×2,03 / ×2,12 | ×2,13 | ×1,94 / ×2,00 | ×2 |
+
+* **Fuerza bruta:** ×3,94 a ×4,04 al duplicar n, frente a ×4 de Θ(n²); pendiente log-log **1,994**.
+* **Divide y vencerás:** las operaciones crecen ×2,12 a ×2,18, casi exactamente el factor de n log n (2·log₂(2n)/log₂ n, entre ×2,13 y ×2,20). El tiempo crece un poco menos (×2,03 a ×2,08) porque una parte del costo es fija por llamada (2n − 1 llamadas, Θ(n)); pendiente log-log **1,044**.
+* **Kadane:** ×1,93 a ×2,04, frente a ×2 de Θ(n); pendiente log-log **0,989**.
+
+**Volumen real** (40 categorías × 36.000 horas, **medido directamente** en n = 36.000 y multiplicado por las 40 categorías, que son series independientes del mismo largo):
+
+| Estrategia | Por categoría | 40 categorías | Frente a la ventana de referencia (2 h) |
+| --- | ---: | ---: | --- |
+| Fuerza bruta (actual, Θ(n²)) | 33,894 s | **22,6 min** | Cabe, pero ocupa el 19 % |
+| Fuerza bruta si recalcula cada suma (Θ(n³), estimada) | 7,8·10¹² sumas × 52,3 ns ≈ 4,7 días | **≈ 188 días** | No termina |
+| Divide y vencerás | 70,79 ms | **2,83 s** | 0,04 % |
+| Kadane | 3,090 ms | **0,12 s** | 0,002 % |
+
+* Kadane es **10.969 veces** más rápido que la fuerza bruta por categoría (33,894 s / 3,090 ms) y divide y vencerás **479 veces**.
+* La fila Θ(n³) es una **estimación**: usa el costo por paso medido (52,3 ns) y el número exacto de sumas, n(n + 1)(n + 2)/6. Encaja con el "más de un día" del cliente, que la versión Θ(n²) no alcanza. En cualquiera de las dos interpretaciones, la recomendación no cambia.
+* **Crecimiento:** con el doble de historia (72.000 horas), Kadane tarda 0,24 s y divide y vencerás 5,74 s para 40 categorías (medido). La fuerza bruta, cuadrática, se multiplicaría por 4: unos **90 minutos** (estimado).
 
 ---
 
@@ -632,6 +725,16 @@ python medicion.py
 ```
 
 `pruebas.py` tarda menos de un segundo. `medicion.py` tarda unos 2 minutos, imprime todas las tablas y estimaciones de la sección 4.1 y guarda `tiempo_vs_n.png`, `operaciones_vs_n.png` y `tiempo_vs_capacidad.png` en `graficas/cargue_vehiculos/`.
+
+**Operación 4 — Saturación de la bodega:**
+
+```bash
+cd src/saturacion_bodega
+python pruebas.py
+python medicion.py
+```
+
+`medicion.py` tarda unos 2,5 minutos, imprime las tablas de la sección 4.2 y guarda `tiempo_vs_n.png` y `operaciones_vs_n.png` en `graficas/saturacion_bodega/`.
 
 ---
 
